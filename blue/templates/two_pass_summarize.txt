@@ -1,0 +1,3 @@
+Using only the following topic keywords, write a 2-3 sentence factual summary. Do not reference any source document. Just synthesize the keywords into a coherent summary.
+
+Keywords: {keywords}

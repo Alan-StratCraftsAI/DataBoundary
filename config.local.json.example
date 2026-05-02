@@ -1,0 +1,26 @@
+{
+  "api_keys": {
+    "openai_api_keys": [
+      "sk-example-openai"
+    ],
+    "claude_api_keys": [
+      "sk-ant-example"
+    ],
+    "deepseek_api_keys_list": [
+      "sk-example-deepseek"
+    ],
+    "gemini_api_keys": [
+      "AIza-example-1",
+      "AIza-example-2"
+    ],
+    "grok_api_keys": [
+      "xai-example"
+    ],
+    "qwen_api_keys": [
+      "sk-example-qwen"
+    ],
+    "kimi_api_keys": [
+      "sk-example-kimi"
+    ]
+  }
+}
