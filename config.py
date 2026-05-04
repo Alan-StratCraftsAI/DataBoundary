@@ -343,6 +343,17 @@ MODELS["qwen35_9b_local"] = {
     "options": {"think": False},
 }
 
+MODELS["qwen35_9b_thinking_local"] = {
+    "name": "Qwen 3.5 9B Thinking (local)",
+    "provider": "ollama",
+    "model": "qwen3.5:9b",
+    "api_base": "http://127.0.0.1:11434",
+    "api_key": None,
+    "tier": "TL",
+    "timeout": 300,
+    "options": {"think": True},
+}
+
 MODELS.update(_load_local_models())
 
 # ---------------------------------------------------------------------------
@@ -584,6 +595,24 @@ RUN_PROFILES = {
     "qwen35_9b_coverage": {
         "description": "Local Qwen 3.5 9B coverage-200 run",
         "model_keys": ["qwen35_9b_local"],
+        "delimiter_lengths": [128],
+        "delimiter_types": ["hex"],
+        "templates": ["strict", "contextual"],
+        "payloads": [
+            "direct_override",
+            "role_switch",
+            "subtle_blend",
+            "delimiter_mimic",
+            "gradual_drift",
+        ],
+        "doc_lengths": ["medium"],
+        "include_baseline": True,
+        "per_tier_overrides": False,
+        "repeat": 10,
+    },
+    "qwen35_9b_thinking_coverage": {
+        "description": "Local Qwen 3.5 9B with thinking enabled coverage-200 run",
+        "model_keys": ["qwen35_9b_thinking_local"],
         "delimiter_lengths": [128],
         "delimiter_types": ["hex"],
         "templates": ["strict", "contextual"],

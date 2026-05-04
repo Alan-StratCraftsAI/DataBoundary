@@ -10,8 +10,6 @@ Usage:
 
 import argparse
 import json
-import os
-import re
 import subprocess
 import sys
 import time
@@ -21,30 +19,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent
 RESULTS_DIR = REPO_ROOT / "results"
 LOG_DIR = RESULTS_DIR / "run_logs"
-OLLAMA_LOG = Path(os.environ.get("LOCALAPPDATA", "")) / "Ollama" / "server.log"
-
-OLLAMA_REQUEST_RE = re.compile(r'\[GIN\] (\d{4})/(\d{2})/(\d{2}) - (\d{2}:\d{2}:\d{2}).*POST.*"/v1/chat/completions"')
-
 
 def log(message: str, transcript_path: Path) -> None:
     line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {message}"
     print(line)
     with open(transcript_path, "a", encoding="utf-8") as f:
         f.write(line + "\n")
-
-
-def count_ollama_requests(since: datetime, log_path: Path) -> int:
-    if not log_path.exists():
-        return 0
-    count = 0
-    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
-        m = OLLAMA_REQUEST_RE.search(line)
-        if m:
-            dt = datetime(int(m[1]), int(m[2]), int(m[3]),
-                          *map(int, m[4].split(":")))
-            if dt >= since:
-                count += 1
-    return count
 
 
 def run_subprocess(cmd: list[str], transcript_path: Path) -> int:
@@ -61,7 +41,6 @@ def run_with_progress(
     transcript_path: Path,
     expected: int,
     interval: int,
-    since: datetime,
 ) -> int:
     import threading
 
@@ -71,6 +50,7 @@ def run_with_progress(
         text=True, encoding="utf-8",
     )
     lock = threading.Lock()
+    done_count = [0]
 
     def log_line(message: str) -> None:
         line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {message}"
@@ -83,6 +63,8 @@ def run_with_progress(
         for line in proc.stdout:
             stripped = line.rstrip()
             if stripped:
+                if "Progress saved:" in stripped:
+                    done_count[0] += 1
                 log_line(stripped)
 
     reader = threading.Thread(target=drain, daemon=True)
@@ -93,9 +75,9 @@ def run_with_progress(
         time.sleep(1)
         if time.monotonic() >= deadline:
             deadline = time.monotonic() + interval
-            done = count_ollama_requests(since, OLLAMA_LOG)
+            done = done_count[0]
             pct = 100 * done / expected if expected else 0
-            log_line(f"--- ollama progress: {done}/{expected} ({pct:.1f}%) ---")
+            log_line(f"--- harness progress: {done}/{expected} ({pct:.1f}%) ---")
 
     reader.join()
     return proc.returncode
@@ -152,7 +134,6 @@ def main() -> None:
         base_cmd, transcript_path,
         expected=args.expected,
         interval=args.interval,
-        since=started_at,
     )
     log(f"Harness exit: {harness_exit}", transcript_path)
 
