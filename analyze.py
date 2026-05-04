@@ -33,15 +33,16 @@ def print_table(headers: list[str], rows: list[list], col_widths: list[int] | No
 
 
 def analyze(results: list[dict]):
-    # Filter out errors
-    valid = [r for r in results if r["judgment"] != "ERROR"]
+    # Filter out errors and empty outputs (model returned no content)
+    valid = [r for r in results if r["judgment"] not in ("ERROR", "EMPTY")]
     errors = [r for r in results if r["judgment"] == "ERROR"]
+    empties = [r for r in results if r["judgment"] == "EMPTY"]
 
     if not valid:
         print("No valid results to analyze.")
         return
 
-    print(f"Total results: {len(results)} ({len(valid)} valid, {len(errors)} errors)\n")
+    print(f"Total results: {len(results)} ({len(valid)} valid, {len(errors)} errors, {len(empties)} empty)\n")
 
     # ----- 1. Overall pass rate by delimiter vs no-delimiter -----
     print("=" * 70)
@@ -188,10 +189,21 @@ def analyze(results: list[dict]):
     else:
         print("\n  No failures with delimiter! All injections were blocked.")
 
-    # ----- 8. Error summary -----
+    # ----- 8. Empty output summary -----
+    if empties:
+        print(f"\n{'=' * 70}")
+        print(f"8. EMPTY OUTPUTS ({len(empties)} total — model returned no content)")
+        print("=" * 70)
+        by_model = defaultdict(int)
+        for e in empties:
+            by_model[e["model"]] += 1
+        for model, count in sorted(by_model.items(), key=lambda x: -x[1]):
+            print(f"  {count:4d}x {model}")
+
+    # ----- 9. Error summary -----
     if errors:
         print(f"\n{'=' * 70}")
-        print(f"8. ERRORS ({len(errors)} total)")
+        print(f"9. ERRORS ({len(errors)} total)")
         print("=" * 70)
         error_types = defaultdict(int)
         for e in errors:

@@ -334,12 +334,13 @@ MODELS["glm4_9b_local"] = {
 
 MODELS["qwen35_9b_local"] = {
     "name": "Qwen 3.5 9B (local)",
-    "provider": "openai_compat",
+    "provider": "ollama",
     "model": "qwen3.5:9b",
-    "api_base": "http://localhost:11434/v1",
-    "api_key": "ollama",
+    "api_base": "http://127.0.0.1:11434",
+    "api_key": None,
     "tier": "TL",
     "timeout": 180,
+    "options": {"think": False},
 }
 
 MODELS.update(_load_local_models())
