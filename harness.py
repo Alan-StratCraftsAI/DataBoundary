@@ -8,6 +8,7 @@ Usage:
     python harness.py --tier T3          # Run T3 models, targeted
     python harness.py --model deepseek   # Run single model
     python harness.py --dry-run          # Print test cases without calling APIs
+    python harness.py --output results/startup.json
 """
 
 import argparse
@@ -160,17 +161,40 @@ async def call_anthropic(client: httpx.AsyncClient, model_cfg: dict, prompt: str
     return await _retry(_call)
 
 
+async def call_ollama(client: httpx.AsyncClient, model_cfg: dict, prompt: str) -> str:
+    """Call a local Ollama server."""
+
+    async def _call():
+        url = f"{model_cfg['api_base'].rstrip('/')}/api/chat"
+        body = {
+            "model": model_cfg["model"],
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "options": {"temperature": 0.0, "num_predict": 1024},
+        }
+        extra_options = model_cfg.get("options") or {}
+        if isinstance(extra_options, dict):
+            body["options"].update(extra_options)
+        resp = await client.post(url, json=body, timeout=120)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["message"]["content"]
+
+    return await _retry(_call)
+
+
 CALLERS = {
     "openai_compat": call_openai_compat,
     "openai": call_openai_compat,
     "gemini": call_gemini,
     "anthropic": call_anthropic,
+    "ollama": call_ollama,
 }
 
 
 async def call_model(client: httpx.AsyncClient, model_key: str, prompt: str) -> str:
     model_cfg = config.MODELS[model_key]
-    if not model_cfg.get("api_key"):
+    if model_cfg["provider"] != "ollama" and not model_cfg.get("api_key"):
         raise ValueError(
             f"Missing API key for model '{model_key}'. "
             "Set the corresponding env var, .env/.env.local entry, "
@@ -451,11 +475,13 @@ async def run_all(
 
 def make_results_path(filename: str | None = None) -> Path:
     if filename:
-        return RESULTS_DIR / filename
-    else:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"results_{ts}.json"
-        return RESULTS_DIR / filename
+        p = Path(filename)
+        if not p.is_absolute():
+            p = Path(__file__).parent / filename
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return RESULTS_DIR / f"results_{ts}.json"
 
 
 def save_results(results: list[dict], filename: str | None = None, path: Path | None = None, quiet: bool = False):
@@ -492,6 +518,8 @@ def main():
                         help="Print test cases without calling APIs")
     parser.add_argument("--concurrency", type=int, default=3,
                         help="Max concurrent API calls (default: 3)")
+    parser.add_argument("--output", type=str, default=None,
+                        help="Optional output JSON path (default: results/results_<timestamp>.json)")
     args = parser.parse_args()
 
     cases = generate_test_cases(
@@ -517,7 +545,7 @@ def main():
 
     print(f"\nRunning tests with concurrency={args.concurrency}...\n")
     start = time.time()
-    results_path = make_results_path()
+    results_path = make_results_path(args.output)
     save_results([], path=results_path, quiet=True)
     print(f"Results file: {results_path}")
     results = asyncio.run(run_all(cases, concurrency=args.concurrency, results_path=results_path))

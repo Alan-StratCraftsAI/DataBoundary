@@ -22,5 +22,17 @@
     "kimi_api_keys": [
       "sk-example-kimi"
     ]
+  },
+  "local_models": {
+    "ollama_qwen25_7b": {
+      "name": "Qwen 2.5 7B Instruct (Ollama)",
+      "provider": "ollama",
+      "model": "qwen2.5:7b-instruct",
+      "api_base": "http://127.0.0.1:11434",
+      "tier": "T1",
+      "options": {
+        "num_ctx": 8192
+      }
+    }
   }
 }
