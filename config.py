@@ -5,7 +5,7 @@ Handles:
 - Delimiter generation (random sequences of configurable length/type)
 - Model registry with API endpoints and cost tiers
 - Test matrix parameters
-- Local developer configuration for API keys
+- Local developer configuration for API keys and Ollama models
 """
 
 import json
@@ -81,6 +81,9 @@ def _load_local_config() -> dict:
     return data if isinstance(data, dict) else {}
 
 
+_local_config = _load_local_config()
+
+
 def _ensure_list(value) -> list[str]:
     if value is None:
         return []
@@ -145,11 +148,38 @@ def _load_keys() -> dict:
 
     # Local JSON config is the preferred developer path and takes precedence
     # over ambient shell variables on a workstation.
-    local_config = _load_local_config()
-    for key_name, raw_value in local_config.get("api_keys", {}).items():
+    for key_name, raw_value in _local_config.get("api_keys", {}).items():
         _merge_key_list(keys, key_name, _ensure_list(raw_value), prepend=True)
 
     return keys
+
+
+def _load_local_models() -> dict:
+    models = {}
+    raw_models = _local_config.get("local_models", {})
+    if not isinstance(raw_models, dict):
+        return models
+
+    for model_key, raw_cfg in raw_models.items():
+        if not isinstance(raw_cfg, dict):
+            continue
+
+        provider = raw_cfg.get("provider")
+        model_name = raw_cfg.get("model")
+        if provider != "ollama" or not model_name:
+            continue
+
+        models[model_key] = {
+            "name": raw_cfg.get("name", model_key),
+            "provider": "ollama",
+            "model": model_name,
+            "api_base": raw_cfg.get("api_base", "http://127.0.0.1:11434"),
+            "api_key": None,
+            "tier": raw_cfg.get("tier", "T1"),
+            "options": raw_cfg.get("options", {}),
+        }
+
+    return models
 
 
 _keys = _load_keys()
@@ -233,6 +263,15 @@ MODELS["qwen"] = {
     "tier": "T1",
 }
 
+MODELS["qwen_plus"] = {
+    "name": "Qwen 3.6 Plus",
+    "provider": "openai_compat",
+    "model": "qwen3.6-plus",
+    "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "api_key": _first_key(_keys, "qwen_api_keys"),
+    "tier": "T2",
+}
+
 MODELS["kimi"] = {
     "name": "Kimi (Moonshot)",
     "provider": "openai_compat",
@@ -241,6 +280,8 @@ MODELS["kimi"] = {
     "api_key": _first_key(_keys, "kimi_api_keys"),
     "tier": "T1",
 }
+
+MODELS.update(_load_local_models())
 
 # ---------------------------------------------------------------------------
 # Test matrix parameters
@@ -372,6 +413,24 @@ RUN_PROFILES = {
     "coverage200": {
         "description": "200-case per-model coverage for TICKET-161-1",
         "model_keys": ["deepseek_v4_flash", "gemini", "grok"],
+        "delimiter_lengths": [128],
+        "delimiter_types": ["hex"],
+        "templates": ["strict", "contextual"],
+        "payloads": [
+            "direct_override",
+            "role_switch",
+            "subtle_blend",
+            "delimiter_mimic",
+            "gradual_drift",
+        ],
+        "doc_lengths": ["medium"],
+        "include_baseline": True,
+        "per_tier_overrides": False,
+        "repeat": 10,
+    },
+    "coverage200_qwen_plus": {
+        "description": "Ticket-005: 200-case coverage for Qwen 3.6 Plus",
+        "model_keys": ["qwen_plus"],
         "delimiter_lengths": [128],
         "delimiter_types": ["hex"],
         "templates": ["strict", "contextual"],

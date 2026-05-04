@@ -108,6 +108,10 @@ Existing provider types:
 - `openai`
 - `gemini`
 - `anthropic`
+- `ollama`
+
+`ollama` is intended for local models and does not require an API key. Instead,
+declare the model under `local_models` in `config.local.json`.
 
 Example for an OpenAI-compatible endpoint:
 
@@ -141,6 +145,7 @@ Then run a small validation slice first:
 
 ```bash
 python harness.py --profile startup --model my_model_key
+python scripts/run_startup.py --dry-run
 ```
 
 If that works, run a fuller pass:
@@ -154,6 +159,16 @@ If the model is expensive or rate-limited, lower concurrency:
 ```bash
 python harness.py --model my_model_key --concurrency 1
 ```
+
+For the repo-standard benchmark workflows, prefer the helper scripts:
+
+```bash
+python scripts/run_startup.py
+python scripts/run_coverage200.py --concurrency 2
+```
+
+Those wrappers run the profile, save a deterministic JSON file when requested,
+and refresh the markdown progress logs under `progress/`.
 
 ## Which Run To Contribute
 

@@ -142,11 +142,30 @@ Example `config.local.json` shape:
     "grok_api_keys": ["xai-..."],
     "qwen_api_keys": ["sk-..."],
     "kimi_api_keys": ["sk-..."]
+  },
+  "local_models": {
+    "ollama_qwen25_7b": {
+      "name": "Qwen 2.5 7B Instruct (Ollama)",
+      "provider": "ollama",
+      "model": "qwen2.5:7b-instruct",
+      "api_base": "http://127.0.0.1:11434",
+      "tier": "T1",
+      "options": {
+        "num_ctx": 8192
+      }
+    }
   }
 }
 ```
 
 See [config.local.json.example](config.local.json.example). Environment variables are still supported for CI, containers, or one-off runs.
+
+Local Ollama models declared under `local_models` are registered automatically
+at startup. They can then be used anywhere a normal model key is accepted:
+
+```bash
+python harness.py --model ollama_qwen25_7b --profile startup
+```
 
 Inspect the matrix without calling any APIs:
 
@@ -158,6 +177,7 @@ Run a small validation round:
 
 ```bash
 python harness.py --profile startup
+python scripts/run_startup.py --dry-run
 ```
 
 Run a single model:
@@ -166,6 +186,7 @@ Run a single model:
 python harness.py --model openai_mini
 python harness.py --model deepseek_v4_flash
 python harness.py --model qwen
+python harness.py --model ollama_qwen25_7b
 ```
 
 Run a tier:
@@ -181,6 +202,16 @@ Analyze one or more result files:
 ```bash
 python analyze.py results/results_*.json
 ```
+
+Run the scripted benchmark workflows with progress tracking:
+
+```bash
+python scripts/run_startup.py
+python scripts/run_coverage200.py --concurrency 2
+```
+
+Each script updates a markdown tracker under `progress/` so unfinished work is
+visible without opening the JSON result files.
 
 ## How Results Are Judged
 
