@@ -15,6 +15,7 @@ import asyncio
 import json
 import re
 import time
+import tempfile
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -70,7 +71,9 @@ async def _retry(coro_factory, retries=MAX_RETRIES):
 
 
 async def call_openai_compat(client: httpx.AsyncClient, model_cfg: dict, prompt: str) -> str:
-    """Call OpenAI-compatible API (DeepSeek, Qwen, Kimi, Grok, OpenAI)."""
+    """Call OpenAI-compatible API (DeepSeek, Qwen, Kimi, Grok, OpenAI, ollama)."""
+    timeout = model_cfg.get("timeout", 60)
+
     async def _call():
         url = f"{model_cfg['api_base']}/chat/completions"
         headers = {
@@ -86,7 +89,7 @@ async def call_openai_compat(client: httpx.AsyncClient, model_cfg: dict, prompt:
             body["max_completion_tokens"] = 1024
         else:
             body["max_tokens"] = 1024
-        resp = await client.post(url, headers=headers, json=body, timeout=60)
+        resp = await client.post(url, headers=headers, json=body, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
         return data["choices"][0]["message"]["content"]
@@ -414,7 +417,7 @@ async def run_test_case(
 
         status = result["judgment"]
         delim_flag = "DELIM" if case["use_delimiter"] else "NODELIM"
-        filter_flag = " →FILTERED" if result.get("filtered") else ""
+        filter_flag = " ->FILTERED" if result.get("filtered") else ""
         print(
             f"  [{status:7s}] {case['model']:10s} | {case['payload']:20s} | "
             f"{case['template']:12s} | {delim_flag:7s} | "
@@ -425,27 +428,51 @@ async def run_test_case(
         return result
 
 
-async def run_all(cases: list[dict], concurrency: int = 3) -> list[dict]:
+async def run_all(
+    cases: list[dict],
+    concurrency: int = 3,
+    results_path: Path | None = None,
+) -> list[dict]:
     """Run all test cases with bounded concurrency."""
     semaphore = asyncio.Semaphore(concurrency)
     results = []
 
     async with httpx.AsyncClient() as client:
         tasks = [run_test_case(client, case, semaphore) for case in cases]
-        results = await asyncio.gather(*tasks)
+        for task in asyncio.as_completed(tasks):
+            result = await task
+            results.append(result)
+            if results_path:
+                save_results(results, path=results_path, quiet=True)
+                print(f"  Progress saved: {len(results)}/{len(cases)} results -> {results_path}")
 
     return list(results)
 
 
-def save_results(results: list[dict], filename: str | None = None):
-    if not filename:
+def make_results_path(filename: str | None = None) -> Path:
+    if filename:
+        return RESULTS_DIR / filename
+    else:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"results_{ts}.json"
-    path = RESULTS_DIR / filename
+        return RESULTS_DIR / filename
+
+
+def save_results(results: list[dict], filename: str | None = None, path: Path | None = None, quiet: bool = False):
+    if not path:
+        path = make_results_path(filename)
     sanitized_results = sanitize_for_storage(results)
-    with open(path, "w") as f:
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f"{path.name}.",
+        suffix=".tmp",
+        dir=path.parent,
+        text=True,
+    )
+    with open(fd, "w") as f:
         json.dump(sanitized_results, f, indent=2, default=str)
-    print(f"\nResults saved to {path}")
+    Path(tmp_name).replace(path)
+    if not quiet:
+        print(f"\nResults saved to {path}")
     return path
 
 
@@ -490,7 +517,10 @@ def main():
 
     print(f"\nRunning tests with concurrency={args.concurrency}...\n")
     start = time.time()
-    results = asyncio.run(run_all(cases, concurrency=args.concurrency))
+    results_path = make_results_path()
+    save_results([], path=results_path, quiet=True)
+    print(f"Results file: {results_path}")
+    results = asyncio.run(run_all(cases, concurrency=args.concurrency, results_path=results_path))
     elapsed = time.time() - start
 
     # Quick summary
@@ -513,7 +543,7 @@ def main():
     for j in ["PASS", "PARTIAL", "FAIL", "ERROR"]:
         print(f"    {j}: {judgments_filtered.get(j, 0)}")
 
-    save_results(results)
+    print(f"\nResults saved to {results_path}")
 
 
 if __name__ == "__main__":
