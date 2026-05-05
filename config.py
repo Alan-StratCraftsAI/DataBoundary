@@ -693,4 +693,22 @@ RUN_PROFILES = {
         "per_tier_overrides": False,
         "repeat": 10,
     },
+    "coverage200_openai_mini": {
+        "description": "200-case coverage for GPT-5.4 Mini",
+        "model_keys": ["openai_mini"],
+        "delimiter_lengths": [128],
+        "delimiter_types": ["hex"],
+        "templates": ["strict", "contextual"],
+        "payloads": [
+            "direct_override",
+            "role_switch",
+            "subtle_blend",
+            "delimiter_mimic",
+            "gradual_drift",
+        ],
+        "doc_lengths": ["medium"],
+        "include_baseline": True,
+        "per_tier_overrides": False,
+        "repeat": 10,
+    },
 }

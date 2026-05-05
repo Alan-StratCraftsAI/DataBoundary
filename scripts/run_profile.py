@@ -1,181 +1,196 @@
-"""
-Run a harness profile with progress monitoring and auto-analysis.
+"""Generic profile runner with progress tracking.
 
 Usage:
-    python scripts/run_profile.py llama31_8b_startup
-    python scripts/run_profile.py llama31_8b_coverage
-    python scripts/run_profile.py llama31_8b_coverage --dry-run
-    python scripts/run_profile.py llama31_8b_coverage --concurrency 1 --interval 60
+    python scripts/run_profile.py <profile_name> [--dry-run] [--concurrency N] [--output PATH]
+
+Examples:
+    python scripts/run_profile.py startup --dry-run
+    python scripts/run_profile.py coverage200 --concurrency 2
+    python scripts/run_profile.py coverage200_qwen_plus
 """
+from __future__ import annotations
 
 import argparse
-import json
-import subprocess
 import sys
-import time
-from datetime import datetime
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).parent.parent
-RESULTS_DIR = REPO_ROOT / "results"
-LOG_DIR = RESULTS_DIR / "run_logs"
+from progress_utils import (
+    PROGRESS_DIR,
+    REPO_ROOT,
+    default_output_path,
+    python_cmd,
+    run_command,
+    summarize_results,
+    write_progress_doc,
+)
 
-def log(message: str, transcript_path: Path) -> None:
-    line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {message}"
-    print(line)
-    with open(transcript_path, "a", encoding="utf-8") as f:
-        f.write(line + "\n")
-
-
-def run_subprocess(cmd: list[str], transcript_path: Path) -> int:
-    proc = subprocess.run(
-        cmd, cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8"
-    )
-    for line in (proc.stdout + proc.stderr).splitlines():
-        log(line, transcript_path)
-    return proc.returncode
+# Allow importing RUN_PROFILES from config.py at repo root.
+sys.path.insert(0, str(REPO_ROOT))
+from config import RUN_PROFILES  # noqa: E402
 
 
-def run_with_progress(
-    cmd: list[str],
-    transcript_path: Path,
-    expected: int,
-    interval: int,
+def run_profile(
+    profile_name: str,
+    *,
+    dry_run: bool = False,
+    concurrency: int = 3,
+    output: str | None = None,
 ) -> int:
-    import threading
+    """Run a named profile with dry-run validation and progress tracking.
 
-    proc = subprocess.Popen(
-        cmd, cwd=REPO_ROOT,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, encoding="utf-8",
-    )
-    lock = threading.Lock()
-    done_count = [0]
+    Returns the process exit code (0 = success).
+    """
+    if profile_name not in RUN_PROFILES:
+        available = ", ".join(sorted(RUN_PROFILES))
+        print(f"Unknown profile '{profile_name}'. Available: {available}", file=sys.stderr)
+        return 1
 
-    def log_line(message: str) -> None:
-        line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {message}"
-        with lock:
-            print(line)
-            with open(transcript_path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
+    title = f"{profile_name} Profile Progress"
+    progress_path = PROGRESS_DIR / f"{profile_name}.md"
 
-    def drain():
-        for line in proc.stdout:
-            stripped = line.rstrip()
-            if stripped:
-                if "Progress saved:" in stripped:
-                    done_count[0] += 1
-                log_line(stripped)
-
-    reader = threading.Thread(target=drain, daemon=True)
-    reader.start()
-
-    deadline = time.monotonic()
-    while proc.poll() is None:
-        time.sleep(1)
-        if time.monotonic() >= deadline:
-            deadline = time.monotonic() + interval
-            done = done_count[0]
-            pct = 100 * done / expected if expected else 0
-            log_line(f"--- harness progress: {done}/{expected} ({pct:.1f}%) ---")
-
-    reader.join()
-    return proc.returncode
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Run a harness profile with progress and analysis.")
-    parser.add_argument("profile", help="Profile name from config.py RUN_PROFILES")
-    parser.add_argument("--concurrency", type=int, default=1)
-    parser.add_argument("--expected", type=int, default=200,
-                        help="Expected number of Ollama requests for progress display")
-    parser.add_argument("--interval", type=int, default=60,
-                        help="Progress report interval in seconds")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Only print test cases, do not call APIs")
-    parser.add_argument("--python", default=sys.executable)
-    args = parser.parse_args()
-
-    RESULTS_DIR.mkdir(exist_ok=True)
-    LOG_DIR.mkdir(exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"{args.profile}_{timestamp}"
-    transcript_path = LOG_DIR / f"{run_name}.transcript.log"
-    analysis_path = LOG_DIR / f"{run_name}.analysis.log"
-    manifest_path = LOG_DIR / f"{run_name}.manifest.json"
-
-    log(f"Profile:     {args.profile}", transcript_path)
-    log(f"Concurrency: {args.concurrency}", transcript_path)
-    log(f"Python:      {args.python}", transcript_path)
-    log(f"Transcript:  {transcript_path}", transcript_path)
-
-    base_cmd = [
-        args.python, "-u", "harness.py",
-        "--profile", args.profile,
-        "--concurrency", str(args.concurrency),
+    steps = [
+        {"label": "Dry-run validation", "status": "pending", "detail": ""},
+        {"label": "Benchmark execution", "status": "pending", "detail": ""},
+        {"label": "Result summary", "status": "pending", "detail": ""},
+        {"label": "Progress document refresh", "status": "pending", "detail": ""},
+    ]
+    commands: list[dict] = []
+    notes = [
+        f"Profile: {profile_name}",
+        f"Description: {RUN_PROFILES[profile_name].get('description', '')}",
     ]
 
-    # Dry-run check
-    log("Dry-run check...", transcript_path)
-    dry_exit = run_subprocess(base_cmd + ["--dry-run"], transcript_path)
-    log(f"Dry-run exit: {dry_exit}", transcript_path)
-    if dry_exit != 0:
-        sys.exit(f"Dry-run failed (exit {dry_exit})")
-
-    if args.dry_run:
-        log("--dry-run requested; stopping here.", transcript_path)
-        return
-
-    # Full run
-    log("Starting harness run...", transcript_path)
-    started_at = datetime.now()
-    harness_exit = run_with_progress(
-        base_cmd, transcript_path,
-        expected=args.expected,
-        interval=args.interval,
-    )
-    log(f"Harness exit: {harness_exit}", transcript_path)
-
-    finished_at = datetime.now()
-
-    # Find result file
-    result_file = None
-    for f in sorted(RESULTS_DIR.glob("results_*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
-        if f.stat().st_mtime >= started_at.timestamp():
-            result_file = f
-            break
-
-    # Analysis
-    analysis_exit = None
-    if result_file:
-        log(f"Result file: {result_file}", transcript_path)
-        analysis_exit = run_subprocess(
-            [args.python, "analyze.py", str(result_file)], analysis_path
+    def save(status: str, pending: list[str] | None = None, **kwargs):
+        write_progress_doc(
+            path=progress_path,
+            title=title,
+            ticket_id="",
+            profile_name=profile_name,
+            status=status,
+            steps=steps,
+            commands=commands,
+            pending_items=pending or [],
+            notes=notes,
+            **kwargs,
         )
-        log(f"Analysis exit: {analysis_exit}", transcript_path)
-    else:
-        log("No new result file found.", transcript_path)
 
-    manifest = {
-        "profile": args.profile,
-        "concurrency": args.concurrency,
-        "started_at": started_at.isoformat(),
-        "finished_at": finished_at.isoformat(),
-        "harness_exit_code": harness_exit,
-        "analysis_exit_code": analysis_exit,
-        "result_file": str(result_file) if result_file else None,
-        "transcript": str(transcript_path),
-        "analysis": str(analysis_path),
-    }
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    log(f"Manifest: {manifest_path}", transcript_path)
+    save("running", pending=["Dry-run has not been executed yet."])
 
-    if harness_exit != 0:
-        sys.exit(f"Harness failed (exit {harness_exit})")
-    if analysis_exit is not None and analysis_exit != 0:
-        sys.exit(f"Analysis failed (exit {analysis_exit})")
+    # --- Step 1: dry-run validation ---
+    dry_run_cmd = python_cmd("harness.py", "--profile", profile_name, "--dry-run")
+    dry_run_result = run_command(dry_run_cmd, quiet=True)
+    commands.append({
+        "command": " ".join(dry_run_cmd[1:]),
+        "status": "ok" if dry_run_result.returncode == 0 else "failed",
+    })
+
+    if dry_run_result.returncode != 0:
+        steps[0]["status"] = "failed"
+        steps[0]["detail"] = "Profile validation failed."
+        steps[3]["status"] = "completed"
+        steps[3]["detail"] = "Failure recorded."
+        full_err = (dry_run_result.stderr or "").strip() or (dry_run_result.stdout or "").strip() or ""
+        if full_err:
+            lines = full_err.splitlines()
+            summary_line = next(
+                (l for l in reversed(lines) if l and not l.startswith(" ")),
+                lines[-1],
+            )
+        else:
+            summary_line = "Unknown error (no output captured)"
+        notes.append(full_err or summary_line)
+        print(f"[FAIL] Dry-run validation failed: {summary_line}", file=sys.stderr)
+        print(f"       Details saved to: {progress_path}", file=sys.stderr)
+        save("blocked", pending=[f"Fix the {profile_name} profile before running the benchmark."])
+        return dry_run_result.returncode
+
+    steps[0]["status"] = "completed"
+    steps[0]["detail"] = "Profile expands successfully."
+    print(f"[OK] Dry-run validation passed for '{profile_name}'.")
+
+    # --- Dry-run only: stop here ---
+    if dry_run:
+        steps[1]["status"] = "skipped"
+        steps[1]["detail"] = "Skipped because --dry-run was requested."
+        steps[2]["status"] = "pending"
+        steps[2]["detail"] = "No result JSON available yet."
+        steps[3]["status"] = "completed"
+        steps[3]["detail"] = "Dry-run state recorded."
+        save("dry-run-only", pending=[
+            f"Run the full {profile_name} benchmark.",
+            "Capture and review the result JSON.",
+        ])
+        return 0
+
+    # --- Step 2: benchmark execution ---
+    output_path = Path(output) if output else default_output_path(profile_name)
+    if not output_path.is_absolute():
+        output_path = REPO_ROOT / output_path
+
+    run_cmd = python_cmd(
+        "harness.py",
+        "--profile", profile_name,
+        "--concurrency", str(concurrency),
+        "--output", str(output_path.relative_to(REPO_ROOT)),
+    )
+    run_result = run_command(run_cmd)
+    commands.append({
+        "command": " ".join(run_cmd[1:]),
+        "status": "ok" if run_result.returncode == 0 else "failed",
+    })
+
+    if run_result.returncode != 0:
+        steps[1]["status"] = "failed"
+        steps[1]["detail"] = "Benchmark execution failed."
+        steps[3]["status"] = "completed"
+        steps[3]["detail"] = "Failure recorded."
+        full_err = (run_result.stderr or "").strip() or (run_result.stdout or "").strip() or ""
+        # Extract a one-line summary: last non-indented line (typically the Exception)
+        if full_err:
+            lines = full_err.splitlines()
+            summary_line = next(
+                (l for l in reversed(lines) if l and not l.startswith(" ")),
+                lines[-1],
+            )
+        else:
+            summary_line = "Unknown error (no output captured)"
+        notes.append(full_err or summary_line)
+        print(f"[FAIL] Benchmark execution failed: {summary_line}", file=sys.stderr)
+        print(f"       Details saved to: {progress_path}", file=sys.stderr)
+        save("blocked", pending=[f"Investigate the benchmark failure and rerun {profile_name}."])
+        return run_result.returncode
+
+    steps[1]["status"] = "completed"
+    steps[1]["detail"] = f"Benchmark output saved to {output_path.relative_to(REPO_ROOT)}."
+    print(f"[OK] Benchmark completed. Output: {output_path.relative_to(REPO_ROOT)}")
+
+    # --- Step 3: result summary ---
+    summary = summarize_results(output_path)
+    steps[2]["status"] = "completed"
+    steps[2]["detail"] = "Summary generated from the latest JSON file."
+    steps[3]["status"] = "completed"
+    steps[3]["detail"] = "Progress tracker refreshed."
+    save("completed", result_path=output_path, summary=summary)
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Run any benchmark profile with progress tracking",
+    )
+    parser.add_argument("profile", help="Profile name defined in config.RUN_PROFILES")
+    parser.add_argument("--concurrency", type=int, default=3, help="Max concurrent model calls")
+    parser.add_argument("--dry-run", action="store_true", help="Validate the profile only")
+    parser.add_argument("--output", type=str, default=None, help="Optional JSON result path")
+    args = parser.parse_args()
+
+    return run_profile(
+        args.profile,
+        dry_run=args.dry_run,
+        concurrency=args.concurrency,
+        output=args.output,
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -25,4 +25,8 @@ __pycache__/
 # Internal development records
 TEST_*.md
 TICKET_*.md
+Ticket_*.md
 *.sh
+
+# Progress tracking notes
+progress/

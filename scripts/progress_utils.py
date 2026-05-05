@@ -20,12 +20,20 @@ def default_output_path(profile_name: str) -> Path:
     return REPO_ROOT / "results" / f"{profile_name}_{stamp}.json"
 
 
-def run_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+def run_command(args: list[str], quiet: bool = False) -> subprocess.CompletedProcess[str]:
+    if quiet:
+        return subprocess.run(
+            args,
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    # Stream stdout/stderr to terminal in real time
     return subprocess.run(
         args,
         cwd=REPO_ROOT,
         text=True,
-        capture_output=True,
         check=False,
     )
 

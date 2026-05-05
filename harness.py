@@ -461,6 +461,9 @@ async def run_test_case(
         return result
 
 
+PROBE_SIZE = 3  # number of cases to test before committing to full run
+
+
 async def run_all(
     cases: list[dict],
     concurrency: int = 3,
@@ -468,18 +471,43 @@ async def run_all(
 ) -> list[dict]:
     """Run all test cases with bounded concurrency."""
     semaphore = asyncio.Semaphore(concurrency)
-    results = []
 
     async with httpx.AsyncClient() as client:
-        tasks = [run_test_case(client, case, semaphore) for case in cases]
-        for task in asyncio.as_completed(tasks):
-            result = await task
-            results.append(result)
+        # Probe: run first PROBE_SIZE cases sequentially
+        probe_size = min(PROBE_SIZE, len(cases))
+        probe_results = []
+        for case in cases[:probe_size]:
+            result = await run_test_case(client, case, semaphore)
+            probe_results.append(result)
             if results_path:
-                save_results(results, path=results_path, quiet=True)
-                print(f"  Progress saved: {len(results)}/{len(cases)} results -> {results_path}")
+                save_results(probe_results, path=results_path, quiet=True)
+                print(f"  Progress saved: {len(probe_results)}/{len(cases)} results -> {results_path}")
 
-    return list(results)
+        # Check if all probe cases are ERROR with same message
+        probe_errors = [r for r in probe_results if r["judgment"] == "ERROR"]
+        if len(probe_errors) == probe_size:
+            error_msgs = {r.get("error", "") for r in probe_errors}
+            if len(error_msgs) == 1:
+                msg = error_msgs.pop()
+                raise SystemExit(
+                    f"\nAborted: first {probe_size} cases all failed with the same error:\n"
+                    f"  {msg}\n"
+                    f"Fix the issue and retry."
+                )
+
+        # Run remaining cases in parallel
+        remaining = cases[probe_size:]
+        if remaining:
+            results = list(probe_results)
+            tasks = [run_test_case(client, case, semaphore) for case in remaining]
+            for task in asyncio.as_completed(tasks):
+                result = await task
+                results.append(result)
+                if results_path:
+                    save_results(results, path=results_path, quiet=True)
+                    print(f"  Progress saved: {len(results)}/{len(cases)} results -> {results_path}")
+            return results
+        return probe_results
 
 
 def make_results_path(filename: str | None = None) -> Path:
