@@ -165,10 +165,14 @@ For the repo-standard benchmark workflows, prefer the helper scripts:
 ```bash
 python scripts/run_startup.py
 python scripts/run_coverage200.py --concurrency 2
+python scripts/run_profile.py qwen35_9b_coverage
 ```
 
 Those wrappers run the profile, save a deterministic JSON file when requested,
 and refresh the markdown progress logs under `progress/`.
+
+If you only need one-off execution without progress tracking, calling `harness.py`
+directly is still fine.
 
 ## Which Run To Contribute
 
@@ -226,8 +230,11 @@ Before opening a PR, check:
 
 - the run completed without obvious auth failures
 - the JSON file contains structured result entries, not only `ERROR`
+- `EMPTY` rows, if any, are explained in the PR note because they are excluded from pass-rate stats
 - the model is identified consistently by one `model` key
 - your PR notes explain any small sample size or rate-limit distortion
+
+Saved result rows include both `judgment` and `judgment_filtered`. The benchmark headline numbers use `judgment`; the filtered variant is there so reviewers can inspect the optional post-hoc filter layer separately.
 
 ## Current Limits
 
