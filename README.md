@@ -1,5 +1,7 @@
 # DataBoundary
 
+> *See it in action: **[databoundary-proxy](https://github.com/databoundary/databoundary-proxy)** — runtime MCP prompt-injection audit that ships the v1 score table inside the npm package.*
+
 Open benchmark + defense lab for delimiter-based prompt injection defense.
 
 Published repo hygiene:
@@ -125,7 +127,8 @@ analyze.py           Result aggregation and summary tables
 blue/templates/      Defense prompt templates
 red/payloads/        Attack payloads
 results/             JSON outputs from completed runs, sanitized on write
-scripts/             Scripted benchmark workflows (run_startup, run_coverage200, run_profile, summarize)
+results/scores.json  Stable per-model pass-rate surface for downstream tools (schema: results/SCORES_SCHEMA.md)
+scripts/             Scripted benchmark workflows (run_startup, run_coverage200, run_profile, summarize, build_scores)
 progress/            Markdown progress trackers updated by scripts
 ```
 

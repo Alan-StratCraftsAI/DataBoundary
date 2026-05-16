@@ -14,7 +14,9 @@ config.local.json
 *credential*.json
 *credentials*.json
 
-results/
+results/*
+!results/scores.json
+!results/SCORES_SCHEMA.md
 
 __pycache__/
 */__pycache__/

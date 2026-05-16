@@ -1,0 +1,138 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_version": "1.1.0",
+  "generated_at": "2026-05-16T01:41:40Z",
+  "pass_rate_definition": "pass / total (errors counted in denominator)",
+  "scores": [
+    {
+      "model": "claude_haiku",
+      "display_name": "Claude Haiku",
+      "layer": "layer_0_single_doc",
+      "total": 420,
+      "pass": 196,
+      "fail": 0,
+      "errors": 224,
+      "pass_rate": 0.4667
+    },
+    {
+      "model": "deepseek_v4_flash",
+      "display_name": "DeepSeek V4 Flash",
+      "layer": "layer_0_single_doc",
+      "total": 844,
+      "pass": 681,
+      "fail": 163,
+      "errors": 0,
+      "pass_rate": 0.8069
+    },
+    {
+      "model": "deepseek_v4_pro",
+      "display_name": "DeepSeek V4 Pro",
+      "layer": "layer_0_single_doc",
+      "total": 208,
+      "pass": 149,
+      "fail": 59,
+      "errors": 0,
+      "pass_rate": 0.7163
+    },
+    {
+      "model": "gemini",
+      "display_name": "Google Gemini",
+      "layer": "layer_0_single_doc",
+      "total": 454,
+      "pass": 92,
+      "fail": 36,
+      "errors": 326,
+      "pass_rate": 0.2026
+    },
+    {
+      "model": "gemma4_e4b",
+      "display_name": "Gemma 4 E4B (local)",
+      "layer": "layer_0_single_doc",
+      "total": 204,
+      "pass": 124,
+      "fail": 80,
+      "errors": 0,
+      "pass_rate": 0.6078
+    },
+    {
+      "model": "glm4_9b_local",
+      "display_name": "glm4_9b_local",
+      "layer": "layer_0_single_doc",
+      "total": 200,
+      "pass": 178,
+      "fail": 22,
+      "errors": 0,
+      "pass_rate": 0.89
+    },
+    {
+      "model": "grok",
+      "display_name": "Grok",
+      "layer": "layer_0_single_doc",
+      "total": 532,
+      "pass": 221,
+      "fail": 111,
+      "errors": 200,
+      "pass_rate": 0.4154
+    },
+    {
+      "model": "kimi",
+      "display_name": "Kimi",
+      "layer": "layer_0_single_doc",
+      "total": 432,
+      "pass": 246,
+      "fail": 139,
+      "errors": 47,
+      "pass_rate": 0.5694
+    },
+    {
+      "model": "llama31_8b_local",
+      "display_name": "llama31_8b_local",
+      "layer": "layer_0_single_doc",
+      "total": 200,
+      "pass": 177,
+      "fail": 23,
+      "errors": 0,
+      "pass_rate": 0.885
+    },
+    {
+      "model": "openai_mini",
+      "display_name": "GPT-5.4 Mini",
+      "layer": "layer_0_single_doc",
+      "total": 1008,
+      "pass": 572,
+      "fail": 21,
+      "errors": 415,
+      "pass_rate": 0.5675
+    },
+    {
+      "model": "qwen25_7b_local",
+      "display_name": "Qwen 2.5 7B (local)",
+      "layer": "layer_0_single_doc",
+      "total": 566,
+      "pass": 389,
+      "fail": 177,
+      "errors": 0,
+      "pass_rate": 0.6873
+    },
+    {
+      "model": "qwen35_9b_local",
+      "display_name": "qwen35_9b_local",
+      "layer": "layer_0_single_doc",
+      "total": 200,
+      "pass": 153,
+      "fail": 45,
+      "errors": 0,
+      "pass_rate": 0.765
+    },
+    {
+      "model": "qwen_plus",
+      "display_name": "qwen_plus",
+      "layer": "layer_0_single_doc",
+      "total": 216,
+      "pass": 203,
+      "fail": 0,
+      "errors": 13,
+      "pass_rate": 0.9398
+    }
+  ]
+}
