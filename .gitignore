@@ -28,6 +28,7 @@ __pycache__/
 TEST_*.md
 TICKET_*.md
 Ticket_*.md
+rcpp_*.md
 *.sh
 
 # Progress tracking notes
